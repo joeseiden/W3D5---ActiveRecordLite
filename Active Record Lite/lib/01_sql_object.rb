@@ -4,19 +4,41 @@ require 'active_support/inflector'
 # of this project. It was only a warm up.
 
 class SQLObject
+  attr_reader :table_name
+
   def self.columns
-    # ...
+    if @column_names.nil?
+      columns = DBConnection.execute2(<<-SQL)
+        SELECT
+          *
+        FROM
+          #{self.table_name}
+        SQL
+
+      @column_names = columns.first.map(&:to_sym)
+    end
+
+    @column_names
   end
 
   def self.finalize!
+    columns.each do |col|
+      define_method col do
+        attributes[col]
+      end
+
+      define_method "#{col}=" do |val|
+        attributes[col] = val
+      end
+    end
   end
 
   def self.table_name=(table_name)
-    # ...
+    @table_name = table_name
   end
 
   def self.table_name
-    # ...
+    @table_name ||= self.name.tableize
   end
 
   def self.all
@@ -32,15 +54,22 @@ class SQLObject
   end
 
   def initialize(params = {})
-    # ...
+    params.each do |key, value|
+      attr_name = key.to_sym
+      
+      unless self.class.columns.include?(attr_name)
+        raise "unknown attribute '#{attr_name}'"
+      end
+
+      send("#{attr_name}=", value)
+    end
   end
 
   def attributes
-    # ...
+    @attributes ||= {}
   end
 
   def attribute_values
-    # ...
   end
 
   def insert
